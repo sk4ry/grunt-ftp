@@ -7,27 +7,28 @@ module.exports = function (grunt) {
 		ftpPut: {
 			test: {
 				options: {
-					host: 'localhost',
-					port: 3334,
-					user: 'test',
-					pass: 'test'
+					host: 'ftp.olympe.in',
+					port: 21,
+					user: 'skary',
+					pass: 'arya77'
 				},
 				files: {
-					'ftp': 'fixture/fixture.txt'
+					'ftp': 'fixture/*.txt',
+					'ftp2': ['fixture/test.txt', 'fixture/fixture.txt']
 				}
 			}
 		},
 		ftpGet: {
 			test: {
 				options: {
-					host: 'localhost',
-					port: 3334,
-					user: 'test',
-					pass: 'test'
+					host: 'ftp.olympe.in',
+					port: 21,
+					user: 'skary',
+					pass: 'arya77'
 				},
 				files: {
-					'fixtureGet/fixture2.txt': 'ftp/fixture/fixture.txt',
-					'<%= dirs.local %>/fixtureGet': 'ftp/fixture/fixture.txt'
+					'fixtureGet/fixture2.txt': '/ftp2/fixture/fixture.txt',
+					'fixtureGet/coucou/': '/ftp/fixture/*'
 				}
 			}
 		},
@@ -37,7 +38,7 @@ module.exports = function (grunt) {
 			}
 		},
 		clean: {
-			test: ['ftp', 'fixtureGet']
+			test: ['ftp', 'ftp2', 'fixtureGet/coucou/*', 'fixtureGet2']
 		}
 	});
 
@@ -68,11 +69,11 @@ module.exports = function (grunt) {
 
 	grunt.registerTask('default', [
 		'clean',
-		'pre',
-		'ftpPut',
+		//'pre',
+		//'ftpPut',
 		'ftpGet',
-		'simplemocha',
-		'post',
-		'clean'
+		// 'simplemocha',
+		// 'post',
+		//'clean'
 	]);
 };

@@ -4,6 +4,8 @@ var grunt = require('grunt');
 
 it('should upload files to an FTP-server', function () {
 	assert(grunt.file.exists('ftp/fixture/fixture.txt'));
+	assert(grunt.file.exists('ftp/fixture/test.txt'));
+	assert(grunt.file.exists('ftp2/fixture/test.txt'));
 });
 
 it('should create a new folder for retrieve files', function () {

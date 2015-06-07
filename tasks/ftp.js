@@ -16,10 +16,29 @@ module.exports = function (grunt) {
 			throw new Error('`host` required');
 		}
 
-		eachAsync(this.files, function (el, i, next) {
+		var files = [];
+		// Use to construct files dest / src map
+		this.files.forEach(function (file) {
+			var transformed = file.src.map(function (source) {
+				return {'src': source, 'dest': file.dest};
+			});
+			files = files.concat(transformed);
+			console.log(file.orig);
+		});
+
+		console.log("");
+		console.log("");
+		console.log("");
+		console.log(chalk.yellow("this.files"), this.files);
+		console.log("");
+		console.log("");
+		console.log("");
+		console.log(chalk.yellow("files"), files);
+
+		eachAsync(files, function(el, i, next) {
 			// have to create a new connection for each file otherwise they conflict
 			var ftp = new JSFtp(options);
-			var finalRemotePath = path.join('/', el.dest, el.src[0]);
+			var finalRemotePath = path.join('/', el.dest, el.src);
 
 			ftp.mkdirp(path.dirname(finalRemotePath), function (err) {
 				if (err) {
@@ -27,7 +46,7 @@ module.exports = function (grunt) {
 					return;
 				}
 
-				var buffer = grunt.file.read(el.src[0], {encoding: null});
+				var buffer = grunt.file.read(el.src, {encoding: null});
 
 				ftp.put(buffer, finalRemotePath, function (err) {
 					if (err) {
@@ -66,43 +85,90 @@ module.exports = function (grunt) {
 			throw new Error('`host` required');
 		}
 
-		eachAsync(this.files, function (el, i, next) {
+		console.log("");
+		console.log("");
+		console.log("");
+		console.log(chalk.yellow("this.files"), this.files);
+
+		var files = [];
+		// Use to construct files dest / src map
+		this.files.forEach(function (file) {
+			var transformed = file.orig.src.map(function(source) {
+				return {'src': source, 'dest': file.orig.dest};
+			});
+			files = files.concat(transformed);
+		});
+
+		
+		console.log("");
+		console.log("");
+		console.log("");
+		console.log(chalk.yellow("files"), files);
+
+		eachAsync(files, function (el, i, next) {
 			// have to create a new connection for each file otherwise they conflict
 			var ftp = new JSFtp(options);
 
-			grunt.file.mkdir(path.dirname(el.dest));
-
-			var finalLocalPath = el.dest;
-			if (grunt.file.isDir(el.dest)) {
-				// if dest is a directory we have to create a file with the source filename
-				finalLocalPath = path.join(el.dest, path.basename(el.src[0]));
-			}
-
-			// retrieve the file
-			ftp.get(el.src[0], finalLocalPath, function (err) {
-				if (err) {
+			ftp.ls(el.src, function(lsError, ftpFiles){
+				if(lsError) {
 					next(err);
+					//ftp.raw.quit();
 					return;
 				}
 
-				fileCount++;
+				console.log(ftpFiles);
+
+				var totalFiles = ftpFiles.map(function(ftpFile) {
+					return {'src': ftpFile.name, 'dest': el.dest};
+				});
+
+				console.log(totalFiles);
+
+				eachAsync(totalFiles, function(test, j, nextnext) {
+					var ftpGet = new JSFtp(options);
+
+					grunt.file.mkdir(path.dirname(test.dest));
+					console.log(test.dest, path.dirname(test.dest));
+
+					var finalLocalPath = test.dest;
+					if (grunt.file.isDir(test.dest)) {
+						// if dest is a directory we have to create a file with the source filename
+						finalLocalPath = path.join(test.dest, path.basename(test.src));
+					}
+
+					console.log(j, finalLocalPath);
+
+					// retrieve the file
+					ftpGet.get(test.src, finalLocalPath, function (getError) {
+						if (getError) {
+							nextnext(getError);
+							return;
+						}
+
+						fileCount++;
+						ftpGet.raw.quit();
+						nextnext();
+						
+					});
+				}, function (err) {
+					if (err) {
+						grunt.warn(err);
+						done();
+						return;
+					}
+
+					if (fileCount > 0) {
+						grunt.log.writeln(chalk.green(fileCount, fileCount === 1 ? 'file' : 'files', 'downloaded successfully'));
+					} else {
+						grunt.log.writeln(chalk.yellow('No files downloaded'));
+					}
+
+					done();
+				});
+
 				ftp.raw.quit();
 				next();
 			});
-		}, function (err) {
-			if (err) {
-				grunt.warn(err);
-				done();
-				return;
-			}
-
-			if (fileCount > 0) {
-				grunt.log.writeln(chalk.green(fileCount, fileCount === 1 ? 'file' : 'files', 'downloaded successfully'));
-			} else {
-				grunt.log.writeln(chalk.yellow('No files downloaded'));
-			}
-
-			done();
 		});
 	});
 };
