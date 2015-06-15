@@ -3,6 +3,7 @@ var path = require('path');
 var eachAsync = require('each-async');
 var chalk = require('chalk');
 var JSFtp = require('jsftp');
+var q = require('q');
 
 JSFtp = require('jsftp-mkdirp')(JSFtp);
 
@@ -79,16 +80,10 @@ module.exports = function (grunt) {
 	grunt.registerMultiTask('ftpGet', 'Download files from an FTP-server', function () {
 		var done = this.async();
 		var options = this.options();
-		var fileCount = 0;
 
 		if (options.host === undefined) {
 			throw new Error('`host` required');
 		}
-
-		console.log("");
-		console.log("");
-		console.log("");
-		console.log(chalk.yellow("this.files"), this.files);
 
 		var files = [];
 		// Use to construct files dest / src map
@@ -99,76 +94,97 @@ module.exports = function (grunt) {
 			files = files.concat(transformed);
 		});
 
-		
-		console.log("");
-		console.log("");
-		console.log("");
-		console.log(chalk.yellow("files"), files);
+		getTree(files, options).then(function (data) {
+			// When we get the ftp tree, begin the downloading
+			return getFiles(data, options);
+		}).then(function (count) {
+			// When the files are download, display how many files was retrieve
+			if (count > 0) {
+				grunt.log.writeln(chalk.green(count, count === 1 ? 'file' : 'files', 'downloaded successfully'));
+			} else {
+				grunt.log.writeln(chalk.yellow('No files downloaded'));
+			}
+		}).catch(function (error) {
+			// If we catch an error during one of the previous action, log it
+			grunt.warn(error);
+		}).then(function() {
+			// Task is done
+			done();
+		});
+	});
+	
+	var getTree = function (files, options) {
+		var totalFiles = [];
+		var deferred = q.defer();
 
 		eachAsync(files, function (el, i, next) {
-			// have to create a new connection for each file otherwise they conflict
 			var ftp = new JSFtp(options);
 
-			ftp.ls(el.src, function(lsError, ftpFiles){
-				if(lsError) {
-					next(err);
-					//ftp.raw.quit();
+			ftp.ls(el.src, function (error, files) {
+				if(error) {
+					next(error);
 					return;
 				}
 
-				console.log(ftpFiles);
+				var isDir = (el.dest.lastIndexOf('/') ===  el.dest.length - 1) || (el.dest.lastIndexOf('\\\\') === el.dest.length - 1);
 
-				var totalFiles = ftpFiles.map(function(ftpFile) {
-					return {'src': ftpFile.name, 'dest': el.dest};
+				var transformed = files.map(function (ftpFile) {
+					return { 'src': ftpFile.name, 'dest': isDir ? el.dest + path.basename(ftpFile.name) : el.dest };
 				});
 
-				console.log(totalFiles);
-
-				eachAsync(totalFiles, function(test, j, nextnext) {
-					var ftpGet = new JSFtp(options);
-
-					grunt.file.mkdir(path.dirname(test.dest));
-					console.log(test.dest, path.dirname(test.dest));
-
-					var finalLocalPath = test.dest;
-					if (grunt.file.isDir(test.dest)) {
-						// if dest is a directory we have to create a file with the source filename
-						finalLocalPath = path.join(test.dest, path.basename(test.src));
-					}
-
-					console.log(j, finalLocalPath);
-
-					// retrieve the file
-					ftpGet.get(test.src, finalLocalPath, function (getError) {
-						if (getError) {
-							nextnext(getError);
-							return;
-						}
-
-						fileCount++;
-						ftpGet.raw.quit();
-						nextnext();
-						
-					});
-				}, function (err) {
-					if (err) {
-						grunt.warn(err);
-						done();
-						return;
-					}
-
-					if (fileCount > 0) {
-						grunt.log.writeln(chalk.green(fileCount, fileCount === 1 ? 'file' : 'files', 'downloaded successfully'));
-					} else {
-						grunt.log.writeln(chalk.yellow('No files downloaded'));
-					}
-
-					done();
-				});
+				totalFiles = totalFiles.concat(transformed);
 
 				ftp.raw.quit();
 				next();
 			});
+		}, function (err) {
+			if (err) {
+				deferred.reject(err);
+				return;
+			}
+
+			deferred.resolve(totalFiles);
 		});
-	});
+
+		return deferred.promise;
+	};
+
+	var getFiles = function (files, options) {
+		var fileCount = 0;
+		var deferred = q.defer();
+
+		eachAsync(files, function (el, i, next) {
+			var ftp = new JSFtp(options);
+
+			grunt.file.mkdir(path.dirname(el.dest));
+
+			var finalLocalPath = el.dest;
+			if (grunt.file.isDir(el.dest)) {
+				// if dest is a directory we have to create a file with the source filename
+				finalLocalPath = path.join(el.dest, path.basename(el.src));
+			}
+
+			// retrieve the file
+			ftp.get(el.src, finalLocalPath, function (getError) {
+				if (getError) {
+					next(getError);
+					return;
+				}
+
+				fileCount++;
+				ftp.raw.quit();
+				next();
+				
+			});
+		}, function (err) {
+			if (err) {
+				deferred.reject(err);
+				return;
+			}
+
+			deferred.resolve(fileCount);
+		});
+
+		return deferred.promise;
+	};
 };

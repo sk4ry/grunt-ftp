@@ -38,7 +38,7 @@ module.exports = function (grunt) {
 			}
 		},
 		clean: {
-			test: ['ftp', 'ftp2', 'fixtureGet/coucou/*', 'fixtureGet2']
+			test: ['ftp', 'ftp2', 'fixtureGet/coucou/*', 'fixtureGet2', 'fixtureGet']
 		}
 	});
 
